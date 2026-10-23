@@ -4,18 +4,18 @@ import numpy as np
 
 # 手機最佳化配置
 st.set_page_config(
-    page_title="台股損益試算表",
+    page_title="元大台股損益試算表",
     page_icon="📊",
     layout="centered"
 )
 
-st.title("📊 台股智慧損益試算表")
+st.title("📊 元大台股智慧損益試算表")
 
 # 交易參數設定區
 with st.container():
-    st.subheader("⚙️ 交易參數")
+    st.subheader("⚙️ 交易參數 (元大電子單)")
     
-    # 使用按鈕式選項切換「作多」與「作空」
+    # 按鈕切換交易方向
     direction = st.radio(
         "選擇交易方向", 
         ["📈 作多 (Long)", "📉 作空 (Short)"], 
@@ -29,25 +29,30 @@ with st.container():
     base_price = st.number_input(price_label, value=118.5, step=0.1, format="%.2f")
     shares = st.number_input("交易股數", value=1000, step=100)
 
-# 費率設定
-fee_rate = 0.001425
+# 元大證券費率設定 (電子單 6 折，整股低消 20 元、零股低消 1 元)
+# 若股數 < 1000 視為零股，套用 1 元低消；整股則套用 20 元低消
+def calc_fee(amount, is_odd_lot):
+    raw_fee = amount * 0.001425 * 0.6  # 6折
+    min_fee = 1 if is_odd_lot else 20
+    return max(min_fee, round(raw_fee))
+
+is_odd_lot = shares < 1000
 tax_rate = 0.0015 if trade_type == "股票當沖" else 0.003
 
 # 計算損益兩平價與基準數據
 break_even_price = base_price
 step_size = 0.5 if base_price >= 100 else 0.1
-
 is_long = "作多" in direction
 
 if is_long:
     buy_amount = base_price * shares
-    buy_fee = round(buy_amount * fee_rate)
+    buy_fee = calc_fee(buy_amount, is_odd_lot)
     total_investment = buy_amount + buy_fee
     
     # 尋找作多的損益兩平價
     for p in np.arange(base_price - 10, base_price + 10, 0.001):
         sa = p * shares
-        sf = round(sa * fee_rate)
+        sf = calc_fee(sa, is_odd_lot)
         stax = round(sa * tax_rate)
         net_sell = sa - sf - stax
         if net_sell >= total_investment:
@@ -56,14 +61,14 @@ if is_long:
             
 else:  # 作空
     initial_sell_amount = base_price * shares
-    initial_sell_fee = round(initial_sell_amount * fee_rate)
+    initial_sell_fee = calc_fee(initial_sell_amount, is_odd_lot)
     initial_tax = round(initial_sell_amount * tax_rate)
     short_revenue = initial_sell_amount - initial_sell_fee - initial_tax
     
     # 尋找作空的損益兩平價
     for p in np.arange(base_price + 10, base_price - 10, -0.001):
         buy_back_amount = p * shares
-        buy_back_fee = round(buy_back_amount * fee_rate)
+        buy_back_fee = calc_fee(buy_back_amount, is_odd_lot)
         total_cover_cost = buy_back_amount + buy_back_fee
         if short_revenue >= total_cover_cost:
             break_even_price = round(p, 2)
@@ -87,7 +92,7 @@ table_data = []
 for p in prices:
     if is_long:
         sell_amount = p * shares
-        sell_fee = round(sell_amount * fee_rate)
+        sell_fee = calc_fee(sell_amount, is_odd_lot)
         sell_tax = round(sell_amount * tax_rate)
         net_sell = sell_amount - sell_fee - sell_tax
         profit = net_sell - total_investment
@@ -99,7 +104,7 @@ for p in prices:
         price_col_name = "賣出價格"
     else:
         buy_back_amount = p * shares
-        buy_back_fee = round(buy_back_amount * fee_rate)
+        buy_back_fee = calc_fee(buy_back_amount, is_odd_lot)
         total_cover_cost = buy_back_amount + buy_back_fee
         profit = short_revenue - total_cover_cost
         roi = (profit / short_revenue) * 100 if short_revenue > 0 else 0
