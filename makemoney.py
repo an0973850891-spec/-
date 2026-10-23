@@ -30,7 +30,7 @@ total_investment = buy_amount + buy_fee
 
 # 計算損益兩平價
 break_even_price = buy_price
-for p in np.arange(buy_price - 5, buy_price + 5, 0.01):
+for p in np.arange(buy_price - 10, buy_price + 10, 0.01):
     sa = p * shares
     sf = round(sa * fee_rate)
     stax = round(sa * tax_rate)
@@ -47,10 +47,13 @@ col2.metric("損益兩平價", f"{break_even_price} 元")
 
 # 矩陣表格
 st.markdown("---")
-st.write("📈 **不同賣出價格之損益矩陣**（綠跌紅漲）：")
+st.write("📈 **不同賣出價格之損益矩陣（上下各 10 檔）**：")
 
+# 根據股價決定跳動單位 (100元以上通常跳0.5元，否則0.1元)
 step_size = 0.5 if buy_price >= 100 else 0.1
-prices = np.round(np.arange(sell_price_input - (step_size * 3), sell_price_input + (step_size * 4), step_size), 2)
+
+# 產生以預設賣出價為中心，上下各 10 檔（共 21 個價位）
+prices = np.round(np.arange(sell_price_input - (step_size * 10), sell_price_input + (step_size * 10.1), step_size), 2)
 
 table_data = []
 for p in prices:
@@ -79,7 +82,7 @@ def style_table(row):
         return ['background-color: #fff3cd'] * len(row)
     return [''] * len(row)
 
-# 損益金額與報酬率紅綠字著色（相容新版 Pandas 的 map 語法）
+# 損益金額與報酬率紅綠字著色
 def color_profit_loss(val):
     try:
         num = float(str(val).replace('%', ''))
@@ -91,7 +94,7 @@ def color_profit_loss(val):
         pass
     return ''
 
-# 套用樣式（使用相容性最好的寫法）
+# 套用樣式
 styled_df = df_result.style.apply(style_table, axis=1)
 if hasattr(styled_df, 'map'):
     styled_df = styled_df.map(color_profit_loss, subset=["損益金額", "報酬率"])
