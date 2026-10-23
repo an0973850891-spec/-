@@ -9,17 +9,23 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("📊 台股智慧損益試算表（作多 / 作空）")
+st.title("📊 台股智慧損益試算表")
 
 # 交易參數設定區
 with st.container():
     st.subheader("⚙️ 交易參數")
     
-    # 新增交易方向選擇
-    direction = st.selectbox("交易方向", ["作多 (Long)", "作空 (Short)"])
+    # 使用按鈕式選項切換「作多」與「作空」
+    direction = st.radio(
+        "選擇交易方向", 
+        ["📈 作多 (Long)", "📉 作空 (Short)"], 
+        horizontal=True, 
+        label_visibility="collapsed"
+    )
+    
     trade_type = st.selectbox("交易類別", ["股票現股", "股票當沖"])
     
-    price_label = "買入價格 (元)" if direction == "作多 (Long)" else "放空價格 (元)"
+    price_label = "買入價格 (元)" if "作多" in direction else "放空價格 (元)"
     base_price = st.number_input(price_label, value=118.5, step=0.1, format="%.2f")
     shares = st.number_input("交易股數", value=1000, step=100)
 
@@ -31,7 +37,9 @@ tax_rate = 0.0015 if trade_type == "股票當沖" else 0.003
 break_even_price = base_price
 step_size = 0.5 if base_price >= 100 else 0.1
 
-if direction == "作多 (Long)":
+is_long = "作多" in direction
+
+if is_long:
     buy_amount = base_price * shares
     buy_fee = round(buy_amount * fee_rate)
     total_investment = buy_amount + buy_fee
@@ -46,14 +54,13 @@ if direction == "作多 (Long)":
             break_even_price = round(p, 2)
             break
             
-else:  # 作空 (Short)
-    # 作空：先賣出（放空），收入 = 賣出金額 - 賣出手續費 - 證交稅
+else:  # 作空
     initial_sell_amount = base_price * shares
     initial_sell_fee = round(initial_sell_amount * fee_rate)
     initial_tax = round(initial_sell_amount * tax_rate)
-    short_revenue = initial_sell_amount - initial_sell_fee - initial_tax  # 實際收到的現金
+    short_revenue = initial_sell_amount - initial_sell_fee - initial_tax
     
-    # 尋找作空的損益兩平價（買回價低於放空價才能賺錢）
+    # 尋找作空的損益兩平價
     for p in np.arange(base_price + 10, base_price - 10, -0.001):
         buy_back_amount = p * shares
         buy_back_fee = round(buy_back_amount * fee_rate)
@@ -71,16 +78,14 @@ col2.metric("損益兩平價 (中心點)", f"{break_even_price} 元")
 
 # 矩陣表格
 st.markdown("---")
-direction_text = "作多（股價高於兩平價獲利）" if direction == "作多 (Long)" else "作空（股價低於兩平價獲利）"
+direction_text = "作多（股價高於兩平價獲利）" if is_long else "作空（股價低於兩平價獲利）"
 st.write(f"📈 **以損益兩平點為中心（上下各 10 檔）— {direction_text}**：")
 
-# 以「損益兩平價」為中心，產生上方 10 檔與下方 10 檔（共 21 個價位）
 prices = np.round(np.arange(break_even_price - (step_size * 10), break_even_price + (step_size * 10.1), step_size), 2)
-# 若是作空，通常價格從高到低排或維持順序皆可，這裡依標準由低到高排列
 
 table_data = []
 for p in prices:
-    if direction == "作多 (Long)":
+    if is_long:
         sell_amount = p * shares
         sell_fee = round(sell_amount * fee_rate)
         sell_tax = round(sell_amount * tax_rate)
@@ -92,8 +97,7 @@ for p in prices:
         fee_sell = sell_fee
         tax_val = sell_tax
         price_col_name = "賣出價格"
-    else:  # 作空
-        # 作空以 p 作為買回價格
+    else:
         buy_back_amount = p * shares
         buy_back_fee = round(buy_back_amount * fee_rate)
         total_cover_cost = buy_back_amount + buy_back_fee
@@ -117,12 +121,12 @@ for p in prices:
 
 df_result = pd.DataFrame(table_data)
 
-# 設定表格樣式：自動高亮報酬率為 0（損益兩平價）的那一列
+# 設定表格樣式：自動高亮損益兩平價那一列
 def style_table(row):
     try:
-        col_name = "賣出價格" if direction == "作多 (Long)" else "買回價格"
+        col_name = "賣出價格" if is_long else "買回價格"
         if abs(float(row[col_name]) - break_even_price) < (step_size / 2):
-            return ['background-color: #fff3cd'] * len(row) # 黃色高亮中心點
+            return ['background-color: #fff3cd'] * len(row)
     except:
         pass
     return [''] * len(row)
