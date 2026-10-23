@@ -9,69 +9,110 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("📊 台股智慧損益試算表")
+st.title("📊 台股智慧損益試算表（作多 / 作空）")
 
 # 交易參數設定區
 with st.container():
     st.subheader("⚙️ 交易參數")
+    
+    # 新增交易方向選擇
+    direction = st.selectbox("交易方向", ["作多 (Long)", "作空 (Short)"])
     trade_type = st.selectbox("交易類別", ["股票現股", "股票當沖"])
-    buy_price = st.number_input("買入價格 (元)", value=118.5, step=0.1, format="%.2f")
+    
+    price_label = "買入價格 (元)" if direction == "作多 (Long)" else "放空價格 (元)"
+    base_price = st.number_input(price_label, value=118.5, step=0.1, format="%.2f")
     shares = st.number_input("交易股數", value=1000, step=100)
 
 # 費率設定
 fee_rate = 0.001425
 tax_rate = 0.0015 if trade_type == "股票當沖" else 0.003
 
-# 計算基準點數據
-buy_amount = buy_price * shares
-buy_fee = round(buy_amount * fee_rate)
-total_investment = buy_amount + buy_fee
+# 計算損益兩平價與基準數據
+break_even_price = base_price
+step_size = 0.5 if base_price >= 100 else 0.1
 
-# 計算精準的損益兩平價 (報酬率為0的中心點)
-break_even_price = buy_price
-for p in np.arange(buy_price - 10, buy_price + 10, 0.001):
-    sa = p * shares
-    sf = round(sa * fee_rate)
-    stax = round(sa * tax_rate)
-    net_sell = sa - sf - stax
-    if net_sell >= total_investment:
-        break_even_price = round(p, 2)
-        break
+if direction == "作多 (Long)":
+    buy_amount = base_price * shares
+    buy_fee = round(buy_amount * fee_rate)
+    total_investment = buy_amount + buy_fee
+    
+    # 尋找作多的損益兩平價
+    for p in np.arange(base_price - 10, base_price + 10, 0.001):
+        sa = p * shares
+        sf = round(sa * fee_rate)
+        stax = round(sa * tax_rate)
+        net_sell = sa - sf - stax
+        if net_sell >= total_investment:
+            break_even_price = round(p, 2)
+            break
+            
+else:  # 作空 (Short)
+    # 作空：先賣出（放空），收入 = 賣出金額 - 賣出手續費 - 證交稅
+    initial_sell_amount = base_price * shares
+    initial_sell_fee = round(initial_sell_amount * fee_rate)
+    initial_tax = round(initial_sell_amount * tax_rate)
+    short_revenue = initial_sell_amount - initial_sell_fee - initial_tax  # 實際收到的現金
+    
+    # 尋找作空的損益兩平價（買回價低於放空價才能賺錢）
+    for p in np.arange(base_price + 10, base_price - 10, -0.001):
+        buy_back_amount = p * shares
+        buy_back_fee = round(buy_back_amount * fee_rate)
+        total_cover_cost = buy_back_amount + buy_back_fee
+        if short_revenue >= total_cover_cost:
+            break_even_price = round(p, 2)
+            break
 
 # 頂部摘要
 st.markdown("---")
 st.subheader("📌 試算摘要")
 col1, col2 = st.columns(2)
-col1.metric("買入價格", f"{buy_price} 元")
+col1.metric("進場價格", f"{base_price} 元")
 col2.metric("損益兩平價 (中心點)", f"{break_even_price} 元")
 
 # 矩陣表格
 st.markdown("---")
-st.write("📈 **以損益兩平點為中心（上下各 10 檔）**：")
-
-# 根據股價決定跳動單位 (100元以上通常跳0.5元，否則0.1元)
-step_size = 0.5 if buy_price >= 100 else 0.1
+direction_text = "作多（股價高於兩平價獲利）" if direction == "作多 (Long)" else "作空（股價低於兩平價獲利）"
+st.write(f"📈 **以損益兩平點為中心（上下各 10 檔）— {direction_text}**：")
 
 # 以「損益兩平價」為中心，產生上方 10 檔與下方 10 檔（共 21 個價位）
 prices = np.round(np.arange(break_even_price - (step_size * 10), break_even_price + (step_size * 10.1), step_size), 2)
+# 若是作空，通常價格從高到低排或維持順序皆可，這裡依標準由低到高排列
 
 table_data = []
 for p in prices:
-    sell_amount = p * shares
-    sell_fee = round(sell_amount * fee_rate)
-    sell_tax = round(sell_amount * tax_rate)
-    net_sell = sell_amount - sell_fee - sell_tax
-    profit = net_sell - total_investment
-    roi = (profit / total_investment) * 100
-    
+    if direction == "作多 (Long)":
+        sell_amount = p * shares
+        sell_fee = round(sell_amount * fee_rate)
+        sell_tax = round(sell_amount * tax_rate)
+        net_sell = sell_amount - sell_fee - sell_tax
+        profit = net_sell - total_investment
+        roi = (profit / total_investment) * 100
+        cost_display = int(round(total_investment))
+        fee_buy = buy_fee
+        fee_sell = sell_fee
+        tax_val = sell_tax
+        price_col_name = "賣出價格"
+    else:  # 作空
+        # 作空以 p 作為買回價格
+        buy_back_amount = p * shares
+        buy_back_fee = round(buy_back_amount * fee_rate)
+        total_cover_cost = buy_back_amount + buy_back_fee
+        profit = short_revenue - total_cover_cost
+        roi = (profit / short_revenue) * 100 if short_revenue > 0 else 0
+        cost_display = int(round(short_revenue))
+        fee_buy = initial_sell_fee
+        fee_sell = buy_back_fee
+        tax_val = initial_tax
+        price_col_name = "買回價格"
+
     table_data.append({
-        "賣出價格": f"{p:.2f}",
+        price_col_name: f"{p:.2f}",
         "損益金額": int(round(profit)),
         "報酬率": f"{roi:.1f}%",
-        "買入手續費": buy_fee,
-        "賣出手續費": sell_fee,
-        "證交稅": sell_tax,
-        "投資成本": int(round(total_investment))
+        "進場手續費": fee_buy,
+        "出場手續費": fee_sell,
+        "證交稅": tax_val,
+        "交易基數": cost_display
     })
 
 df_result = pd.DataFrame(table_data)
@@ -79,7 +120,8 @@ df_result = pd.DataFrame(table_data)
 # 設定表格樣式：自動高亮報酬率為 0（損益兩平價）的那一列
 def style_table(row):
     try:
-        if abs(float(row["賣出價格"]) - break_even_price) < (step_size / 2):
+        col_name = "賣出價格" if direction == "作多 (Long)" else "買回價格"
+        if abs(float(row[col_name]) - break_even_price) < (step_size / 2):
             return ['background-color: #fff3cd'] * len(row) # 黃色高亮中心點
     except:
         pass
