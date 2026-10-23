@@ -11,12 +11,11 @@ st.set_page_config(
 
 st.title("📊 台股智慧損益試算表")
 
-# 交易參數設定區
+# 交易參數設定區（移除了預設賣出價格）
 with st.container():
     st.subheader("⚙️ 交易參數")
     trade_type = st.selectbox("交易類別", ["股票現股", "股票當沖"])
     buy_price = st.number_input("買入價格 (元)", value=118.5, step=0.1, format="%.2f")
-    sell_price_input = st.number_input("預設賣出價格 (元)", value=119.5, step=0.1, format="%.2f")
     shares = st.number_input("交易股數", value=1000, step=100)
 
 # 費率設定
@@ -47,13 +46,13 @@ col2.metric("損益兩平價", f"{break_even_price} 元")
 
 # 矩陣表格
 st.markdown("---")
-st.write("📈 **不同賣出價格之損益矩陣（上下各 10 檔）**：")
+st.write("📈 **以買入價為中心的損益矩陣（上下各 10 檔）**：")
 
 # 根據股價決定跳動單位 (100元以上通常跳0.5元，否則0.1元)
 step_size = 0.5 if buy_price >= 100 else 0.1
 
-# 產生以預設賣出價為中心，上下各 10 檔（共 21 個價位）
-prices = np.round(np.arange(sell_price_input - (step_size * 10), sell_price_input + (step_size * 10.1), step_size), 2)
+# 產生以買入價格為中心，上下各 10 檔（共 21 個價位）
+prices = np.round(np.arange(buy_price - (step_size * 10), buy_price + (step_size * 10.1), step_size), 2)
 
 table_data = []
 for p in prices:
@@ -76,10 +75,13 @@ for p in prices:
 
 df_result = pd.DataFrame(table_data)
 
-# 設定表格樣式：黃色高亮預設賣出價
+# 設定表格樣式：自動高亮最接近「損益兩平價」的那一列
 def style_table(row):
-    if float(row["賣出價格"]) == float(sell_price_input):
-        return ['background-color: #fff3cd'] * len(row)
+    try:
+        if abs(float(row["賣出價格"]) - break_even_price) < (step_size / 2):
+            return ['background-color: #fff3cd'] * len(row) # 黃色高亮損益兩平價
+    except:
+        pass
     return [''] * len(row)
 
 # 損益金額與報酬率紅綠字著色
