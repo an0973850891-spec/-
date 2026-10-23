@@ -73,16 +73,14 @@ for p in prices:
 
 df_result = pd.DataFrame(table_data)
 
-# 設定表格樣式：損益金額與報酬率「正紅負綠」，預設賣出價該列黃色高亮
+# 設定表格樣式：黃色高亮預設賣出價
 def style_table(row):
-    styles = [''] * len(row)
-    # 針對整列高亮預設賣出價
     if float(row["賣出價格"]) == float(sell_price_input):
-        styles = ['background-color: #fff3cd'] * len(row)
-    return styles
+        return ['background-color: #fff3cd'] * len(row)
+    return [''] * len(row)
 
+# 損益金額與報酬率紅綠字著色（相容新版 Pandas 的 map 語法）
 def color_profit_loss(val):
-    # 支援數值或帶有 % 的字串判斷
     try:
         num = float(str(val).replace('%', ''))
         if num > 0:
@@ -93,11 +91,11 @@ def color_profit_loss(val):
         pass
     return ''
 
-# 套用樣式
-styled_df = (
-    df_result.style
-    .apply(style_table, axis=1)
-    .applymap(color_profit_loss, subset=["損益金額", "報酬率"])
-)
+# 套用樣式（使用相容性最好的寫法）
+styled_df = df_result.style.apply(style_table, axis=1)
+if hasattr(styled_df, 'map'):
+    styled_df = styled_df.map(color_profit_loss, subset=["損益金額", "報酬率"])
+else:
+    styled_df = styled_df.applymap(color_profit_loss, subset=["損益金額", "報酬率"])
 
 st.dataframe(styled_df, use_container_width=True)
