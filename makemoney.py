@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# 手機最佳化配置（改回置中單欄，手機上下滑動最順暢）
+# 手機最佳化配置
 st.set_page_config(
     page_title="台股損益試算表",
     page_icon="📊",
@@ -11,7 +11,7 @@ st.set_page_config(
 
 st.title("📊 台股智慧損益試算表")
 
-# 交易參數設定區（直接放在主畫面，手機不用點側邊欄）
+# 交易參數設定區
 with st.container():
     st.subheader("⚙️ 交易參數")
     trade_type = st.selectbox("交易類別", ["股票現股", "股票當沖"])
@@ -47,7 +47,7 @@ col2.metric("損益兩平價", f"{break_even_price} 元")
 
 # 矩陣表格
 st.markdown("---")
-st.write("📈 **不同賣出價格之損益矩陣**：")
+st.write("📈 **不同賣出價格之損益矩陣**（綠跌紅漲）：")
 
 step_size = 0.5 if buy_price >= 100 else 0.1
 prices = np.round(np.arange(sell_price_input - (step_size * 3), sell_price_input + (step_size * 4), step_size), 2)
@@ -73,9 +73,31 @@ for p in prices:
 
 df_result = pd.DataFrame(table_data)
 
-def highlight_row(row):
+# 設定表格樣式：損益金額與報酬率「正紅負綠」，預設賣出價該列黃色高亮
+def style_table(row):
+    styles = [''] * len(row)
+    # 針對整列高亮預設賣出價
     if float(row["賣出價格"]) == float(sell_price_input):
-        return ['background-color: #fff3cd'] * len(row)
-    return [''] * len(row)
+        styles = ['background-color: #fff3cd'] * len(row)
+    return styles
 
-st.dataframe(df_result.style.apply(highlight_row, axis=1), use_container_width=True)
+def color_profit_loss(val):
+    # 支援數值或帶有 % 的字串判斷
+    try:
+        num = float(str(val).replace('%', ''))
+        if num > 0:
+            return 'color: #d9534f; font-weight: bold;'  # 紅色 (賺)
+        elif num < 0:
+            return 'color: #28a745; font-weight: bold;'  # 綠色 (賠)
+    except:
+        pass
+    return ''
+
+# 套用樣式
+styled_df = (
+    df_result.style
+    .apply(style_table, axis=1)
+    .applymap(color_profit_loss, subset=["損益金額", "報酬率"])
+)
+
+st.dataframe(styled_df, use_container_width=True)
