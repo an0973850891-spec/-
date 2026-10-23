@@ -15,7 +15,7 @@ st.title("📊 元大台股智慧損益試算表")
 with st.container():
     st.subheader("⚙️ 交易參數 (元大電子單)")
     
-    # 按鈕切換交易方向
+    # 1. 交易方向按鈕
     direction = st.radio(
         "選擇交易方向", 
         ["📈 作多 (Long)", "📉 作空 (Short)"], 
@@ -23,14 +23,19 @@ with st.container():
         label_visibility="collapsed"
     )
     
-    trade_type = st.selectbox("交易類別", ["股票現股", "股票當沖"])
+    # 2. 交易類別按鈕
+    trade_type = st.radio(
+        "選擇交易類別", 
+        ["現股交易", "股票當沖"], 
+        horizontal=True, 
+        label_visibility="collapsed"
+    )
     
     price_label = "買入價格 (元)" if "作多" in direction else "放空價格 (元)"
     base_price = st.number_input(price_label, value=118.5, step=0.1, format="%.2f")
     shares = st.number_input("交易股數", value=1000, step=100)
 
 # 元大證券費率設定 (電子單 6 折，整股低消 20 元、零股低消 1 元)
-# 若股數 < 1000 視為零股，套用 1 元低消；整股則套用 20 元低消
 def calc_fee(amount, is_odd_lot):
     raw_fee = amount * 0.001425 * 0.6  # 6折
     min_fee = 1 if is_odd_lot else 20
